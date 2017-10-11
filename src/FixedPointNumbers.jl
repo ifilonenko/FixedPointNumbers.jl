@@ -1,5 +1,3 @@
-__precompile__()
-
 module FixedPointNumbers
 
 using Base: reducedim_initarray
@@ -25,6 +23,7 @@ export
     FixedPoint,
     Fixed,
     Normed,
+    Scaled,
 # "special" typealiases
     # Q and U typealiases are exported in separate source files
 # literal constructor constants
@@ -125,6 +124,7 @@ end
 
 include("fixed.jl")
 include("normed.jl")
+include("scaled.jl")
 include("deprecations.jl")
 
 eps(::Type{T}) where {T <: FixedPoint} = T(oneunit(rawtype(T)),0)
