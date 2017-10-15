@@ -1,3 +1,5 @@
+# __precompile__()
+
 module FixedPointNumbers
 
 using Base: reducedim_initarray
@@ -14,14 +16,24 @@ if isdefined(Base, :rem1)
 end
 using Base: @pure
 
+### Rounding Schemes
+abstract type RoundingScheme end
+abstract type Randomized <: RoundingScheme end
+abstract type NearestNeighbor <: RoundingScheme end
+
+### FixedPoints
 # T => BaseType
 # f => Number of Bytes reserved for fractional part
 abstract type FixedPoint{T <: Integer, f} <: Real end
-
-abstract type ScaledFixedPoint{T <: Integer, f, s} <: Real end
+# T => BaseType
+# s => Scale factor that can be any Real number
+abstract type ScaledFixedPoint{T <: Integer, s, r <: RoundingScheme} <: Real end
 const GenericFixedPoint = Union{FixedPoint, ScaledFixedPoint}
 
 export
+    RoundingScheme,
+    Randomized,
+    NearestNeighbor,
     GenericFixedPoint,
     FixedPoint,
     ScaledFixedPoint,
@@ -37,19 +49,21 @@ export
     uf14,
     uf16,
 # Functions
-    scaledual
+    scaledual,
+    widen1
 
 reinterpret(x::GenericFixedPoint) = x.i
 reinterpret(::Type{T}, x::FixedPoint{T,f}) where {T,f} = x.i
-reinterpret(::Type{T}, x::ScaledFixedPoint{T,f,s}) where {T,f,s} = x.i
+reinterpret(::Type{T}, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme} = x.i
 
 # construction using the (approximate) intended value, i.e., N0f8
-*(x::Real, ::Type{X}) where {X<:GenericFixedPoint} = X(x)
+*(x::Real, ::Type{X}) where {X<:FixedPoint} = X(x)
 
 # comparison
 ==(x::T, y::T) where {T <: GenericFixedPoint} = x.i == y.i
- <(x::T, y::T) where {T <: GenericFixedPoint} = x.i  < y.i
+ <(x::T, y::T) where {T <: GenericFixedPoint} = x.i < y.i
 <=(x::T, y::T) where {T <: GenericFixedPoint} = x.i <= y.i
+
 """
     isapprox(x::FixedPoint, y::FixedPoint; rtol=0, atol=max(eps(x), eps(y)))
 
@@ -66,13 +80,12 @@ end
 
 # predicates
 isinteger(x::FixedPoint{T,f}) where {T,f} = (x.i&(1<<f-1)) == 0
-isinteger(x::ScaledFixedPoint{T,f,s}) where {T,f,s} = (x.i&(1<<f-1)) == 0
 
 # traits
-typemax(::Type{T}) where {T <: GenericFixedPoint} = T(typemax(rawtype(T)), 0)
-typemin(::Type{T}) where {T <: GenericFixedPoint} = T(typemin(rawtype(T)), 0)
-realmin(::Type{T}) where {T <: GenericFixedPoint} = eps(T)
-realmax(::Type{T}) where {T <: GenericFixedPoint} = typemax(T)
+typemax(::Type{T}) where {T <: FixedPoint} = T(typemax(rawtype(T)), 0)
+typemin(::Type{T}) where {T <: FixedPoint} = T(typemin(rawtype(T)), 0)
+realmin(::Type{T}) where {T <: FixedPoint} = eps(T)
+realmax(::Type{T}) where {T <: FixedPoint} = typemax(T)
 
 widen1(::Type{Int8})   = Int16
 widen1(::Type{UInt8})  = UInt16
@@ -85,21 +98,26 @@ widen1(::Type{UInt64}) = UInt128
 widen1(::Type{UInt128}) = UInt128
 widen1(x::Integer) = x % widen1(typeof(x))
 
+# Max number of floating bits
+maxf(::Type{Int8})=7
+maxf(::Type{Int16})=15
+maxf(::Type{Int32})=31
+
 const ShortInts = Union{Int8,UInt8,Int16,UInt16}
 
 floattype(::Type{FixedPoint{T,f}}) where {T <: ShortInts,f} = Float32
-floattype(::Type{ScaledFixedPoint{T,f,s}}) where {T <: ShortInts,f,s} = Float32
+floattype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: ShortInts,s, r<: RoundingScheme} = Float32
 floattype(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = Float64
-floattype(::Type{ScaledFixedPoint{T,f,s}}) where {T <: Integer,f,s} = Float64
+floattype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s, r<: RoundingScheme} = Float64
 floattype(::Type{F}) where {F <: GenericFixedPoint} = floattype(supertype(F))
 floattype(x::GenericFixedPoint) = floattype(typeof(x))
 
 nbitsfrac(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = f
-nbitsfrac(::Type{ScaledFixedPoint{T,f,s}}) where {T <: Integer,f,s} = f
+nbitsfrac(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s,  r<: RoundingScheme} = f
 nbitsfrac(::Type{F}) where {F <: GenericFixedPoint} = nbitsfrac(supertype(F))
 
 rawtype(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = T
-rawtype(::Type{ScaledFixedPoint{T,f,s}}) where {T <: Integer,f,s} = T
+rawtype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s,r<: RoundingScheme} = T
 rawtype(::Type{F}) where {F <: GenericFixedPoint} = rawtype(supertype(F))
 rawtype(x::GenericFixedPoint) = rawtype(typeof(x))
 
@@ -108,27 +126,34 @@ _iotypealias = IOBuffer()
 
 # Printing. These are used to generate type-symbols, so we need them
 # before we include any files.
-function showtype(io::IO, ::Type{X}) where {X <: GenericFixedPoint}
+function showtype(io::IO, ::Type{X}) where {X <: FixedPoint}
     print(io, typechar(X))
     f = nbitsfrac(X)
     m = sizeof(X)*8-f-signbits(X)
     print(io, m, 'f', f)
     io
 end
+function showtype(io::IO, ::Type{X}) where {X <: ScaledFixedPoint}
+    print(io, typechar(X))
+    io
+end
+function show(io::IO, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme}
+    showcompact(io, x)
+    showtype(io, typeof(x))
+    print(io, "($s)")
+    io
+end
 function show(io::IO, x::FixedPoint{T,f}) where {T,f}
     showcompact(io, x)
     showtype(io, typeof(x))
 end
-function show(io::IO, x::ScaledFixedPoint{T,f,s}) where {T,f,s}
-    showcompact(io, x)
-    showtype(io, typeof(x))
-end
+
 const _log2_10 = 3.321928094887362
-showcompact(io::IO, x::FixedPoint{T,f}) where {T,f} = show(io, round(convert(Float64,x), ceil(Int,f/_log2_10)))
-showcompact(io::IO, x::ScaledFixedPoint{T,f,s}) where {T,f,s} = show(io, round(convert(Float64,x), ceil(Int,f/_log2_10)))
+showcompact(io::IO, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme} = show(io, round(convert(Float64,x)*s,ceil(Int,maxf(T)/_log2_10)))
+showcompact(io::IO, x::FixedPoint{T,f}) where {T,f} = show(io, round((Float64,x), ceil(Int,f/_log2_10)))
 
 if VERSION >= v"0.7.0-DEV.1790"
-    function Base.showarg(io::IO, a::Array{T}, toplevel) where {T<:GenericFixedPoint}
+    function Base.showarg(io::IO, a::Array{T}, toplevel) where {T<:FixedPoint}
         toplevel || print(io, "::")
         print(io, "Array{")
         showtype(io, T)
@@ -142,27 +167,27 @@ include("normed.jl")
 include("scaled.jl")
 include("deprecations.jl")
 
-eps(::Type{T}) where {T <: GenericFixedPoint} = T(oneunit(rawtype(T)),0)
-eps(::T) where {T <: GenericFixedPoint} = eps(T)
-sizeof(::Type{T}) where {T <: GenericFixedPoint} = sizeof(rawtype(T))
+eps(::Type{T}) where {T <: FixedPoint} = T(oneunit(rawtype(T)),0)
+eps(::T) where {T <: FixedPoint} = eps(T)
+sizeof(::Type{T}) where {T <: FixedPoint} = sizeof(rawtype(T))
 
 # Promotions for reductions
 const Treduce = Float64
-r_promote(::typeof(+), x::GenericFixedPoint) = Treduce(x)
-r_promote(::typeof(*), x::GenericFixedPoint)= Treduce(x)
+r_promote(::typeof(+), x::FixedPoint{T}) where {T} = Treduce(x)
+r_promote(::typeof(*), x::FixedPoint{T}) where {T} = Treduce(x)
 
 reducedim_init(f::typeof(identity),
                               op::typeof(+),
-                              A::AbstractArray{T}, region) where {T <: GenericFixedPoint} =
+                              A::AbstractArray{T}, region) where {T <: FixedPoint} =
     reducedim_initarray(A, region, zero(Treduce))
 reducedim_init(f::typeof(identity),
                               op::typeof(*),
-                              A::AbstractArray{T}, region) where {T <: GenericFixedPoint} =
+                              A::AbstractArray{T}, region) where {T <: FixedPoint} =
     reducedim_initarray(A, region, oneunit(Treduce))
 
 for f in (:div, :fld, :fld1)
     @eval begin
-        $f(x::T, y::T) where {T <: GenericFixedPoint} = $f(reinterpret(x),reinterpret(y))
+        $f(x::T, y::T) where {T <: FixedPoint} = $f(reinterpret(x),reinterpret(y))
     end
 end
 for f in (:rem, :mod, :mod1, :rem1, :min, :max)
@@ -170,7 +195,7 @@ for f in (:rem, :mod, :mod1, :rem1, :min, :max)
         continue
     end
     @eval begin
-        $f(x::T, y::T) where {T <: GenericFixedPoint} = T($f(reinterpret(x),reinterpret(y)),0)
+        $f(x::T, y::T) where {T <: FixedPoint} = T($f(reinterpret(x),reinterpret(y)),0)
     end
 end
 
@@ -178,12 +203,12 @@ end
 # Particularly useful for arrays.
 scaledual(Tdual::Type, x) = oneunit(Tdual), x
 scaledual(b::Tdual, x) where {Tdual <: Number} = b, x
-scaledual(Tdual::Type, x::Union{T,AbstractArray{T}}) where {T <: GenericFixedPoint} =
-    convert(Tdual, 1/oneunit(T)), reinterpret(rawtype(T), x)
-scaledual(b::Tdual, x::Union{T,AbstractArray{T}}) where {Tdual <: Number,T <: GenericFixedPoint} =
-    convert(Tdual, b/oneunit(T)), reinterpret(rawtype(T), x)
+scaledual(Tdual::Type, x::Union{T,AbstractArray{T}}) where {T <: FixedPoint} =
+    (Tdual, 1/oneunit(T)), reinterpret(rawtype(T), x)
+scaledual(b::Tdual, x::Union{T,AbstractArray{T}}) where {Tdual <: Number,T <: FixedPoint} =
+    (Tdual, b/oneunit(T)), reinterpret(rawtype(T), x)
 
-@noinline function throw_converterror(::Type{T}, x) where {T <: GenericFixedPoint}
+@noinline function throw_error(::Type{T}, x) where {T <: FixedPoint}
     n = 2^(8*sizeof(T))
     bitstring = sizeof(T) == 1 ? "an 8-bit" : "a $(8*sizeof(T))-bit"
     io = IOBuffer()
@@ -192,7 +217,7 @@ scaledual(b::Tdual, x::Union{T,AbstractArray{T}}) where {Tdual <: Number,T <: Ge
     throw(ArgumentError("$T is $bitstring type representing $n values from $Tmin to $Tmax; cannot represent $x"))
 end
 
-rand(::Type{T}) where {T <: GenericFixedPoint} = reinterpret(T, rand(rawtype(T)))
-rand(::Type{T}, sz::Dims) where {T <: GenericFixedPoint} = reinterpret(T, rand(rawtype(T), sz))
+rand(::Type{T}) where {T <: FixedPoint} = reinterpret(T, rand(rawtype(T)))
+rand(::Type{T}, sz::Dims) where {T <: FixedPoint} = reinterpret(T, rand(rawtype(T), sz))
 
 end # module
