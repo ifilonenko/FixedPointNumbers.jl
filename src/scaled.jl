@@ -1,5 +1,5 @@
-# Scaled{T,f,s} maps Ints with a scale factor of d s.t. the domain is
-# [-d*2^(f-1,...,-d,0,d,...d*(2^(f-1)-1))]
+# Scaled{T,s,r} maps Ints with a scale factor of s s.t. the domain is
+# [-s*2^(b-1,...,-s,0,s,...s*(2^(b-1)-1))] where b is number of bits
 using Distributions
 struct Scaled{T<:Signed,s,r <: RoundingScheme} <: ScaledFixedPoint{T,s,r}
     i::T
