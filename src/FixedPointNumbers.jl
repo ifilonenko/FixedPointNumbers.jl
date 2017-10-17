@@ -1,4 +1,4 @@
-__precompile__()
+# __precompile__()
 
 module FixedPointNumbers
 
@@ -27,7 +27,7 @@ abstract type NearestNeighbor <: RoundingScheme end
 abstract type FixedPoint{T <: Integer, f} <: Real end
 # T => BaseType
 # s => Scale factor that can be any Real number
-abstract type ScaledFixedPoint{T <: Integer, s, r <: RoundingScheme} <: Real end
+abstract type ScaledFixedPoint{T <: Integer, f, s, r <: RoundingScheme} <: Real end
 const GenericFixedPoint = Union{FixedPoint, ScaledFixedPoint}
 
 export
@@ -50,11 +50,14 @@ export
     uf16,
 # Functions
     scaledual,
-    widen1
+    widen1,
+    maxf,
+# Constants
+    _log2_10
 
 reinterpret(x::GenericFixedPoint) = x.i
 reinterpret(::Type{T}, x::FixedPoint{T,f}) where {T,f} = x.i
-reinterpret(::Type{T}, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme} = x.i
+reinterpret(::Type{T}, x::ScaledFixedPoint{T,f,s,r}) where {T,f,s,r <: RoundingScheme} = x.i
 
 # construction using the (approximate) intended value, i.e., N0f8
 *(x::Real, ::Type{X}) where {X<:FixedPoint} = X(x)
@@ -69,17 +72,23 @@ reinterpret(::Type{T}, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingSchem
 
 For FixedPoint numbers, the default criterion is that `x` and `y` differ by no more than `eps`, the separation between adjacent fixed-point numbers.
 """
-function isapprox(x::T, y::T; rtol=0, atol=max(eps(x), eps(y))) where {T <: GenericFixedPoint}
+function isapprox(x::T, y::T; rtol=0, atol=max(eps(x), eps(y))) where {T <: FixedPoint}
     maxdiff = T(atol+rtol*max(abs(x), abs(y)))
     rx, ry, rd = reinterpret(x), reinterpret(y), reinterpret(maxdiff)
     abs(signed(widen1(rx))-signed(widen1(ry))) <= rd
 end
-function isapprox(x::GenericFixedPoint, y::GenericFixedPoint; rtol=0, atol=max(eps(x), eps(y)))
+function isapprox(x::FixedPoint, y::FixedPoint; rtol=0, atol=max(eps(x), eps(y)))
     isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+end
+function isapprox(x::ScaledFixedPoint, y::Real,num_its=10000)
+    diff = float(eps(x))
+    abs(mean([float(x) for a in 1:num_its]) - y) <= float(diff)
 end
 
 # predicates
 isinteger(x::FixedPoint{T,f}) where {T,f} = (x.i&(1<<f-1)) == 0
+isinteger(x::ScaledFixedPoint{T,f,s,r}) where {T,f,s,r} = (x.i&(1<<f-1)) == 0
+isinteger(x::Real) = x-floor(x) == 0.0
 
 # traits
 typemax(::Type{T}) where {T <: FixedPoint} = T(typemax(rawtype(T)), 0)
@@ -106,18 +115,18 @@ maxf(::Type{Int32})=31
 const ShortInts = Union{Int8,UInt8,Int16,UInt16}
 
 floattype(::Type{FixedPoint{T,f}}) where {T <: ShortInts,f} = Float32
-floattype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: ShortInts,s, r<: RoundingScheme} = Float32
+floattype(::Type{ScaledFixedPoint{T,f,s,r}}) where {T <: ShortInts,f,s, r<: RoundingScheme} = Float32
 floattype(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = Float64
-floattype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s, r<: RoundingScheme} = Float64
+floattype(::Type{ScaledFixedPoint{T,f,s,r}}) where {T <: Integer,f,s, r<: RoundingScheme} = Float64
 floattype(::Type{F}) where {F <: GenericFixedPoint} = floattype(supertype(F))
 floattype(x::GenericFixedPoint) = floattype(typeof(x))
 
 nbitsfrac(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = f
-nbitsfrac(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s,  r<: RoundingScheme} = f
+nbitsfrac(::Type{ScaledFixedPoint{T,f,s,r}}) where {T <: Integer,f,s,r<: RoundingScheme} = f
 nbitsfrac(::Type{F}) where {F <: GenericFixedPoint} = nbitsfrac(supertype(F))
 
 rawtype(::Type{FixedPoint{T,f}}) where {T <: Integer,f} = T
-rawtype(::Type{ScaledFixedPoint{T,s,r}}) where {T <: Integer,s,r<: RoundingScheme} = T
+rawtype(::Type{ScaledFixedPoint{T,f,s,r}}) where {T <: Integer,f,s,r<: RoundingScheme} = T
 rawtype(::Type{F}) where {F <: GenericFixedPoint} = rawtype(supertype(F))
 rawtype(x::GenericFixedPoint) = rawtype(typeof(x))
 
@@ -135,9 +144,12 @@ function showtype(io::IO, ::Type{X}) where {X <: FixedPoint}
 end
 function showtype(io::IO, ::Type{X}) where {X <: ScaledFixedPoint}
     print(io, typechar(X))
+    f = nbitsfrac(X)
+    m = sizeof(X)*8-f-signbits(X)
+    print(io, m, 'f', f)
     io
 end
-function show(io::IO, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme}
+function show(io::IO, x::ScaledFixedPoint{T,f,s,r}) where {T,f,s,r <: RoundingScheme}
     showcompact(io, x)
     showtype(io, typeof(x))
     print(io, "($s)")
@@ -149,7 +161,7 @@ function show(io::IO, x::FixedPoint{T,f}) where {T,f}
 end
 
 const _log2_10 = 3.321928094887362
-showcompact(io::IO, x::ScaledFixedPoint{T,s,r}) where {T,s,r <: RoundingScheme} = show(io, round(convert(Float64,x)*s,ceil(Int,maxf(T)/_log2_10)))
+showcompact(io::IO, x::ScaledFixedPoint{T,f,s,r}) where {T,f,s,r <: RoundingScheme} = show(io, round(convert(Float64,x),ceil(Int,f/_log2_10)))
 showcompact(io::IO, x::FixedPoint{T,f}) where {T,f} = show(io, round((Float64,x), ceil(Int,f/_log2_10)))
 
 if VERSION >= v"0.7.0-DEV.1790"
@@ -167,9 +179,9 @@ include("normed.jl")
 include("scaled.jl")
 include("deprecations.jl")
 
-eps(::Type{T}) where {T <: FixedPoint} = T(oneunit(rawtype(T)),0)
-eps(::T) where {T <: FixedPoint} = eps(T)
-sizeof(::Type{T}) where {T <: FixedPoint} = sizeof(rawtype(T))
+eps(::Type{T}) where {T <: GenericFixedPoint} = T(oneunit(rawtype(T)),0)
+eps(::T) where {T <: GenericFixedPoint} = eps(T)
+sizeof(::Type{T}) where {T <: GenericFixedPoint} = sizeof(rawtype(T))
 
 # Promotions for reductions
 const Treduce = Float64
