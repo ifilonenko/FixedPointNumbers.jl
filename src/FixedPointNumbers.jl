@@ -10,7 +10,8 @@ import Base: ==, <, <=, -, +, *, /, ~, isapprox,
              zero, oneunit, one, typemin, typemax, realmin, realmax, eps, sizeof, reinterpret,
              float, trunc, round, floor, ceil, bswap,
              div, fld, rem, mod, mod1, fld1, min, max, minmax,
-             start, next, done, r_promote, reducedim_init, rand
+             start, next, done, r_promote, reducedim_init, rand,
+             dot
 if isdefined(Base, :rem1)
     import Base: rem1
 end

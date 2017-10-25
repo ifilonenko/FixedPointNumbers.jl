@@ -22,19 +22,22 @@ up(x::Type{T},b1::I,b2::I) where {T <: Signed,I <: Integer} = b1+b2 > maxf(x) ? 
 # basic operators
 -(x::Scaled{T,f,s,r}) where {T,f,s,r} = Scaled{T,f,s,r}(-x.i,true) # negation
 abs(x::Scaled{T,f,s,r}) where {T,f,s,r} = Scaled{T,f,s,r}(abs(x.i),true) # absolute value
-# Exact adds: only when f's are different are the same
-+(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: RoundingScheme} =
-    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+1,s,r}(x.i+y.i)
 # Saturated Add when T,f,s,r are the same
 +(x::Scaled{T,f,s,r}, y::Scaled{T,f,s,r}) where {T <:Signed,f,s,r<: RoundingScheme} =
     Scaled{T,f,s,r}(clamp(x.i+y.i,-(1<<f),(1<<f-1)))
+# Exact adds: only when f's are different
++(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: RoundingScheme} =
+    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+1,s,r}(x.i+y.i)
 -(x::Scaled{T,f,s,r}, y::Scaled{T,f,s,r}) where {T <:Signed,f,s,r<: RoundingScheme} =
     Scaled{T,f,s,r}(clamp(x.i-y.i,-(1<<f),(1<<f-1)))
 # Multiplication
 *(x::Scaled{T1,f1,s1,r}, y::Scaled{T2,f2,s2,r}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
     Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),f1+f2,s1*s2,r}(Base.widemul(x.i,y.i))
 # Dot Product, which needs to be overloaded to ensure that bit sizes does not expotentaially increase
+dot(x::Array{Scaled{T1,f1,s1,r}}, y::Array{Scaled{T2,f2,s2,r}}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
+    sum(collect(map(x->float(x[1]*x[2]) , collect(zip(x,y)))))
 # Matrix Multiplication, needs to be overloaded with same reason as Dot Product
+
 
 # extended functions
 # Whether a Scaled is within the same subdomain as another Scaled
