@@ -44,7 +44,7 @@ sat_add(x::Scaled{T,f,s,r}, y::Scaled{T,f,s,r}) where {T <:Signed,f,s,r<: Roundi
 # Whether a Scaled is within the same subdomain as another Scaled
 subdomain(x::Type{Scaled{T1,f1,s1,r}}, y::Type{Scaled{T2,f2,s2,r}}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
     isinteger(s1/s2) && log2(s1/s2) <= maxf(T2)-maxf(T1)+2
-    
+
 # conversions
 convert(::Type{Scaled{T,f,s,r}}, x::Integer) where {T,f,s,r} = Scaled{T,f,s,r}(T(x/s),0)
 function convert(::Type{Scaled{T,f,s,r}}, x::AbstractFloat) where {T,f,s,r <: RoundingScheme}
