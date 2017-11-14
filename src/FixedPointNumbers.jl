@@ -53,6 +53,10 @@ export
     scaledual,
     widen1,
     maxf,
+    get_T,
+    get_f,
+    get_s,
+    get_r,
 # Constants
     _log2_10
 
@@ -112,6 +116,7 @@ widen1(x::Integer) = x % widen1(typeof(x))
 maxf(::Type{Int8})=7
 maxf(::Type{Int16})=15
 maxf(::Type{Int32})=31
+maxf(::Type{Int64})=63
 
 const ShortInts = Union{Int8,UInt8,Int16,UInt16}
 
