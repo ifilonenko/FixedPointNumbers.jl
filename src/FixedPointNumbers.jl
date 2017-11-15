@@ -94,6 +94,8 @@ end
 isinteger(x::FixedPoint{T,f}) where {T,f} = (x.i&(1<<f-1)) == 0
 isinteger(x::ScaledFixedPoint{T,f,s,r}) where {T,f,s,r} = (x.i&(1<<f-1)) == 0
 isinteger(x::Real) = x-floor(x) == 0.0
+isinteger(x::R,tolerance::R) where {R<:Real} = (x-floor(x)) <= tolerance
+
 
 # traits
 typemax(::Type{T}) where {T <: FixedPoint} = T(typemax(rawtype(T)), 0)
