@@ -12,19 +12,35 @@ struct Scaled{T<:Signed,f,s,r <: RoundingScheme} <: ScaledFixedPoint{T,f,s,r}
         convert(Array{Scaled{T,f,s,r}},x)
     Scaled{T,f,s,r}(x) where {T,f,s,r <: RoundingScheme} =
         convert(Scaled{T,f,s,r}, x)
-
 end
-export sat_add,
+export
+    eq,
+    le,
+    leq,
+    up,
+    sat_add,
     subdomain,
     get_T,
     get_f,
     get_s,
     get_r
+
+reinterpret(::Type{Scaled{T,f,s,r}},x::T) where {T <: Signed ,f,s,r} = Scaled{T,f,s,r}(x,0)
+zero(::Type{Scaled{T,f,s,r}}) where {T <: Signed ,f,s,r} = Scaled{T,f,s,r}(zero(T),0)
+function oneunit(::Type{T}) where {T <: Scaled}
+    T(typemax(rawtype(T)) >> (8*sizeof(T)-nbitsfrac(T)), 0)
+end
+one(::Type{T}) where {T <: Scaled} = oneunit(T)
+zero(x::Scaled) = zero(typeof(x))
+oneunit(x::Scaled) =  one(typeof(x))
+one(x::Scaled) = oneunit(x)
+rawone(v) = reinterpret(one(v))
+
 typechar(::Type{X}) where {X <: Scaled} = 'S'
 signbits(::Type{X}) where {X <: Scaled} = 1
 # datatype comparison
 eq(x::Type{T1}, y::Type{T2}) where {T1,T2 <: Signed} =   sizeof(x)==sizeof(y)
-less(x::Type{T1}, y::Type{T2}) where {T1,T2 <: Signed} = sizeof(x) <sizeof(y)
+le(x::Type{T1}, y::Type{T2}) where {T1,T2 <: Signed} = sizeof(x) <sizeof(y)
 leq(x::Type{T1}, y::Type{T2}) where {T1,T2 <: Signed} =  sizeof(x)<=sizeof(y)
 
 # datatype upgrade when necessary
@@ -45,18 +61,6 @@ sat_add(x::Scaled{T,f,s,r}, y::Scaled{T,f,s,r}) where {T <:Signed,f,s,r<: Roundi
 # Multiplication
 *(x::Scaled{T1,f1,s1,r}, y::Scaled{T2,f2,s2,r}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
     float(Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),f1+f2+1,s1*s2,r}(Base.widemul(x.i,y.i),0))
-
-# Matrix Matrix Multiplication
-# function *(x::Array{Scaled{T1,f1,s1,r}}, y::Array{Scaled{T2,f2,s2,r}}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
-#     (m,n) = size(x)
-#     (n,p) = size(y)
-#     fout = f1 + f2 + ceil(log2(n))
-#     assert(fout>63), "Something is wrong"
-#     z = zeros({Int64,fout,sx*sy,Randomized},m,p)
-#     for loops
-#     end
-#     return z
-# end
 
 # Type Multiplication
 *(x::Type{Scaled{T1,f1,s1,r}}, y::Type{Scaled{T2,f2,s2,r}}) where {T1,T2 <:Signed,f1,s1,f2,s2,r<: RoundingScheme} =
