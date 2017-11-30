@@ -78,10 +78,8 @@ subdomain(x::Type{Scaled{T1,f1,s1,r}}, y::Type{Scaled{T2,f2,s2,r}},tol::Real) wh
     isinteger(s1/s2,tol) && log2(s1/s2) <= f2-f1+1
 
 # conversions
-convert(::Type{Scaled{T,f,s,r}}, x::Integer) where {T,f,s,r <: Exact}
-    = Scaled{T,f,s,r}(T(x/s),0)
-convert(::Type{Scaled{T,f,s,r}}, x::Integer) where {T,f,s,r <: Saturated}
-    = Scaled{T,f,s,r}(T(clamp(x/s,-(1<<f),(1<<f-1))),0)
+convert(::Type{Scaled{T,f,s,r}}, x::Integer) where {T,f,s,r <: Exact} = Scaled{T,f,s,r}(T(x/s),0)
+convert(::Type{Scaled{T,f,s,r}}, x::Integer) where {T,f,s,r <: Saturated} = Scaled{T,f,s,r}(T(clamp(x/s,-(1<<f),(1<<f-1))),0)
 
 function convert(::Type{Scaled{T,f,s,r}}, x::AbstractFloat) where {T,f,s,r <: RoundingScheme}
     if r==ExactAndRandomized

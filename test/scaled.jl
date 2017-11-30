@@ -117,9 +117,9 @@ end
     result = sC(0.5)+sC(2000.5)
     @test isa(result,Scaled)
     r_type = typeof(result)
-    @test get_T(r_type) == Int64
-    @test get_f(r_type) == 31+2
-    @test get_s(r_type) == 1./12800
+    @test get_T(r_type) == Int16
+    @test get_f(r_type) == 7+2
+    @test get_s(r_type) == 1./127
     @test get_r(r_type) == SatAndRandomized
 end
 
@@ -137,13 +137,13 @@ end
 end
 
 
-@testset "Checking saturated add logic" begin
+@testset "Checking saturated subtract logic" begin
     sC = Scaled{Int8,7,1./127,SatAndRandomized}
     result = sC(0.5)-sC(2000.5)
     @test isa(result,Scaled)
     r_type = typeof(result)
-    @test get_T(r_type) == Int64
-    @test get_f(r_type) == 31+2
-    @test get_s(r_type) == 1./12800
+    @test get_T(r_type) == Int16
+    @test get_f(r_type) == 7+2
+    @test get_s(r_type) == 1./127
     @test get_r(r_type) == SatAndRandomized
 end
