@@ -19,8 +19,12 @@ using Base: @pure
 
 ### Rounding Schemes
 abstract type RoundingScheme end
-abstract type Randomized <: RoundingScheme end
-abstract type NearestNeighbor <: RoundingScheme end
+abstract type Saturated <: RoundingScheme end
+abstract type Exact <: RoundingScheme end
+abstract type SatAndRandomized <: Saturated end
+abstract type SatAndNearestNeighbor <: Saturated end
+abstract type ExactAndRandomized <: Exact end
+abstract type ExactAndNearestNeighbor <: Exact end
 
 ### FixedPoints
 # T => BaseType
@@ -33,8 +37,12 @@ const GenericFixedPoint = Union{FixedPoint, ScaledFixedPoint}
 
 export
     RoundingScheme,
-    Randomized,
-    NearestNeighbor,
+    Saturated,
+    Exact,
+    SatAndRandomized,
+    SatAndNearestNeighbor,
+    ExactAndRandomized,
+    ExactAndNearestNeighbor,
     GenericFixedPoint,
     FixedPoint,
     ScaledFixedPoint,
@@ -85,8 +93,8 @@ end
 function isapprox(x::FixedPoint, y::FixedPoint; rtol=0, atol=max(eps(x), eps(y)))
     isapprox(promote(x, y)...; rtol=rtol, atol=atol)
 end
-function isapprox(x::ScaledFixedPoint, y::Real,num_its=10000)
-    diff = float(eps(x))
+function isapprox(x::ScaledFixedPoint, y::Real,num_its=100000,rtol=0)
+    diff = float(eps(x)) + rtol*float(eps(x))
     abs(mean([float(x) for a in 1:num_its]) - y) <= float(diff)
 end
 
