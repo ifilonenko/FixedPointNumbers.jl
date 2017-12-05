@@ -53,15 +53,10 @@ function sat_add(x::Scaled{T,f,s,r}, y::Scaled{T,f,s,r}) where {T <:Signed,f,s,r
     Scaled{T,f,s,r}(clamp(Int32(x.i)+Int32(y.i),-(1<<f),(1<<f-1)),0)
 end
 # Exact adds: only when f's are different
-+(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: Exact} =
-    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(x.i+y.i,0)
--(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: Exact} =
-    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(x.i-y.i,0)
-# Saturated adds: only when f's are different
-+(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: Saturated} =
-    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(Int32(x.i)+Int32(y.i),0)
--(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: Saturated} =
-    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(Int32(x.i)-Int32(y.i),0)
++(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: RoundingScheme} =
+    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(Int64(x.i)+Int64(y.i),0)
+-(x::Scaled{T1,f1,s,r}, y::Scaled{T2,f2,s,r}) where {T1,T2 <:Signed,f1,f2,s,r<: RoundingScheme} =
+    Scaled{leq(T1,T2) ? up(T2,f1,f2) : up(T1,f1,f2),max(f1,f2)+2,s,r}(Int64(x.i)-Int64(y.i),0)
 
 
 # Multiplication
@@ -92,7 +87,7 @@ function convert(::Type{Scaled{T,f,s,r}}, x::AbstractFloat) where {T,f,s,r <: Ro
         return Scaled{T,f,s,r}(convert(T,clamp(floor(Base.widemul(x,(1./s)) + 0.5),-(1<<f),(1<<f-1))),0)
     end
 end
-convert(::Type{TF}, x::Scaled{T,f,s,r}) where {TF <: AbstractFloat,T,f,s,r} = round(Float64(x.i)*s,ceil(Int,f/_log2_10))
+convert(::Type{TF}, x::Scaled{T,f,s,r}) where {TF <: AbstractFloat,T,f,s,r} = Float64(x.i)*s
 
 # get methods
 get_T(::Type{Scaled{T,f,s,r}}) where {T,f,s,r} = T
